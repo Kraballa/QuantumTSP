@@ -10,22 +10,20 @@ namespace TSP {
     // by the Ising Hamiltonian \Sum_ij J_ij Z_i Z_j + \sum_i h_i Z_i.
     operation InstanceHamiltonian(z: Qubit[], t: Double, h: Double[], J: Double[]) : Unit
     {
-        using (ancilla = Qubit())
+        use ancilla = Qubit();
+        for (i in 0..5)
         {
-            for (i in 0..5)
+            R(PauliZ, 2.0 * t * h[i], z[i]);
+        }
+        for (i in 0..5)
+        {
+            for (j in i+1..5)
             {
-                R(PauliZ, 2.0 * t * h[i], z[i]);
-            }
-            for (i in 0..5)
-            {
-                for (j in i+1..5)
-                {
-                    CNOT(z[i], ancilla);
-                    CNOT(z[j], ancilla);
-                    R(PauliZ, 2.0 * t * J[6*i+j], ancilla);
-                    CNOT(z[i], ancilla);
-                    CNOT(z[j], ancilla);
-                }
+                CNOT(z[i], ancilla);
+                CNOT(z[j], ancilla);
+                R(PauliZ, 2.0 * t * J[6*i+j], ancilla);
+                CNOT(z[i], ancilla);
+                CNOT(z[j], ancilla);
             }
         }
     }
@@ -73,16 +71,16 @@ namespace TSP {
 
         // Now run the QAOA circuit
         mutable r = new Bool[6];
-        using (x = Qubit[6])
+        use x = Qubit[6];
+        
+        ApplyToEach(H, x);                          // prepare the uniform distribution
+        for (i in 0..p-1)
         {
-            ApplyToEach(H, x);                          // prepare the uniform distribution
-            for (i in 0..p-1)
-            {
-                InstanceHamiltonian(x, tz[i], h, J);    // do Exp(-i H_C tz[i])
-                DriverHamiltonian(x, tx[i]);            // do Exp(-i H_0 tx[i])
-            }
-            set r = MeasureAllReset(x);                 // measure in the computational basis
+            InstanceHamiltonian(x, tz[i], h, J);    // do Exp(-i H_C tz[i])
+            DriverHamiltonian(x, tx[i]);            // do Exp(-i H_0 tx[i])
         }
+        set r = MeasureAllReset(x);                 // measure in the computational basis
+        
         return r;
     }
 }
