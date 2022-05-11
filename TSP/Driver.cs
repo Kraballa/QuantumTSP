@@ -10,6 +10,8 @@ namespace TSP
 {
     class Program
     {
+        const int NUM_RUNS = 100;
+
         // Calculate the cost of Santa's journey
         // segmentCosts defines the cost of each potential segment of the journey
         // segmentUsed indicates whether the segment was part of the itinerary
@@ -52,7 +54,7 @@ namespace TSP
                 // Define the costs of journey segments
                 double[] segmentCosts = { 4.70, 9.09, 9.03, 5.70, 8.02, 1.71 };
                 // Define the penalty for constraint violation
-                double penalty = 20.0;
+                double penalty = segmentCosts.Sum() / 2 + (1 - 0.125);
 
                 // Here are some magic QAOA parameters that we got by lucky guessing.
                 // Theoretically, they should yield the optimal solution in 70.6% of trials.
@@ -67,13 +69,13 @@ namespace TSP
                 var bestCost = 100.0 * penalty;
                 var bestItinerary = new bool[6];
                 var successNumber = 0;
-                for (int trial = 0; trial < 20; trial++)
+                for (int trial = 0; trial < NUM_RUNS; trial++)
                 {
                     var result = QAOA_santa.Run(qsim, costs, penalty, tx, tz, 5).Result;
                     var tmp = result.ToArray<bool>();
                     var cost = Cost(segmentCosts, tmp);
                     var sat = Satisfactory(tmp);
-                    Console.WriteLine($"result = {result}, cost = {cost}, satisfactory = {sat}");
+                    //Console.WriteLine($"result = {result}, cost = {cost}, satisfactory = {sat}");
                     if (sat)
                     {
                         if (cost < bestCost - 1E-6)
@@ -90,10 +92,8 @@ namespace TSP
                     }
                 }
                 Console.WriteLine("Simulation is complete\n");
-                Console.WriteLine($"Best itinerary found: {bestItinerary}, cost = {bestCost}");
-                Console.WriteLine($"{successNumber * 100.0 / 20}% of runs found the best itinerary\n");
-                Console.WriteLine("Press any key to continue\n");
-                Console.ReadKey();
+                Console.WriteLine($"Best itinerary found: {string.Join(',', bestItinerary)}, cost = {bestCost}");
+                Console.WriteLine($"{successNumber * 100.0 / NUM_RUNS}% of runs found the best itinerary\n");
             }
         }
     }
