@@ -13,6 +13,9 @@ namespace TSP
         const int NUM_RUNS = 1000;
         const int NUM_QAOA_STEPS = 5;
 
+        const int NUM_GRID_STEPS = 2;
+        const int NUM_GRID_RUNS = 20;
+
         static Dictionary<int, Data> Dict = new Dictionary<int, Data>();
 
         // Calculate the cost of Santa's journey
@@ -126,6 +129,68 @@ namespace TSP
             var tz = new QArray<double>(dtz);
             var costs = new QArray<double>(segmentCosts);
 
+            //grid search ab hier
+            for(double x0 = -1; x0 < 1; x0 += 0.1)
+            {
+                for (double x1 = -1; x1 < 1; x1 += 0.1)
+                {
+                    Data bestStep = null;
+                    double[] bestNumbers = new double[4];
+                    for (double x2 = -1; x2 < 1; x2 += 0.1)
+                    {
+                        for (double x3 = -1; x3 < 1; x3 += 0.1)
+                        {
+                            QArray<double> mn1 = new QArray<double>(new double []{ x0, x1 });
+                            QArray<double> mn2 = new QArray<double>(new double[] { x2, x3 });
+                            
+
+                            for(int i = 0; i < NUM_GRID_RUNS; i++)
+                            {
+                                bool[] result = QAOA_santa.Run(qsim, costs, penalty, mn1, mn2, NUM_GRID_STEPS).Result.ToArray<bool>();
+                                double cost = Cost(segmentCosts, result);
+                                bool sat = Satisfactory(result);
+                                int key = Calc(result);
+                                if (sat)
+                                {
+                                    if (bestStep == null)
+                                    {
+                                        bestStep = new Data(1, cost, (uint)key, sat);
+                                        bestNumbers[0] = x0;
+                                        bestNumbers[1] = x1;
+                                        bestNumbers[2] = x2;
+                                        bestNumbers[3] = x3;
+                                    }
+                                    else if (cost < bestStep.Cost)
+                                    {
+                                        bestStep.Cost = cost;
+                                        bestStep.Weg = (uint)key;
+                                        bestStep.Count = 1;
+                                        bestNumbers[0] = x0;
+                                        bestNumbers[1] = x1;
+                                        bestNumbers[2] = x2;
+                                        bestNumbers[3] = x3;
+                                    }
+                                    else if (key == bestStep.Weg)
+                                    {
+                                        bestStep.Count++;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if(bestStep != null)
+                    {
+                        Console.WriteLine($"best current run: {bestStep}, magic numbers: {string.Join(',',bestNumbers)}");
+                    }
+                    else
+                    {
+                        Console.WriteLine("no valid path was found");
+                    }
+                }
+            }
+            return;
+            //bis hier
+
             Data bestRun = null;
             for (int trial = 0; trial < NUM_RUNS; trial++)
             {
@@ -207,7 +272,7 @@ namespace TSP
 
             public override string ToString()
             {
-                return String.Format($"{Weg.ToBinary(6)}: {Count} \t cost: {Cost}");
+                return string.Format($"{Weg.ToBinary(6)}: {Count} \t cost: {Cost}");
             }
         }
     }
