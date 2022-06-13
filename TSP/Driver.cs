@@ -10,7 +10,10 @@ namespace TSP
 {
     class Program
     {
-        const int NUM_RUNS = 100;
+        const int NUM_RUNS = 1000;
+        const int NUM_QAOA_STEPS = 5;
+
+        static Dictionary<int, Data> Dict = new Dictionary<int, Data>();
 
         // Calculate the cost of Santa's journey
         // segmentCosts defines the cost of each potential segment of the journey
@@ -47,54 +50,180 @@ namespace TSP
         static void Main(string[] args)
         {
             // We start by loading the simulator that we will use to run our Q# operations.
-            using (var qsim = new QuantumSimulator())
+            QuantumSimulator qsim = new QuantumSimulator();
+
+            Console.WriteLine("QTSP v5.2\n");
+
+            while (true)
             {
-                Console.WriteLine("Starting simulation\n");
+                Console.WriteLine("#11111111111#");
+                Console.WriteLine("4 5       6 2 ");
+                Console.WriteLine("4   5   6   2 ");
+                Console.WriteLine("4     X     2 ");
+                Console.WriteLine("4   6   5   2 ");
+                Console.WriteLine("4 6       5 2 ");
+                Console.WriteLine("#33333333333#");
 
-                // Define the costs of journey segments
-                double[] segmentCosts = { 4.70, 9.09, 9.03, 5.70, 8.02, 1.71 };
-                // Define the penalty for constraint violation
-                double penalty = segmentCosts.Sum() / 2 + (1 - 0.125);
-
-                // Here are some magic QAOA parameters that we got by lucky guessing.
-                // Theoretically, they should yield the optimal solution in 70.6% of trials.
-                double[] dtx = { 0.619193, 0.742566, 0.060035, -1.568955, 0.045490 };
-                double[] dtz = { 3.182203, -1.139045, 0.221082, 0.537753, -0.417222 };
-
-                // Convert parameters to QArray<Double> to pass them to Q#
-                var tx = new QArray<Double>(dtx);
-                var tz = new QArray<Double>(dtz);
-                var costs = new QArray<Double>(segmentCosts);
-
-                var bestCost = 100.0 * penalty;
-                var bestItinerary = new bool[6];
-                var successNumber = 0;
-                for (int trial = 0; trial < NUM_RUNS; trial++)
+                Console.WriteLine("enter 6 weights");
+                string line = Console.ReadLine().Trim();
+                if(line == "exit")
                 {
-                    var result = QAOA_santa.Run(qsim, costs, penalty, tx, tz, 5).Result;
-                    var tmp = result.ToArray<bool>();
-                    var cost = Cost(segmentCosts, tmp);
-                    var sat = Satisfactory(tmp);
-                    //Console.WriteLine($"result = {result}, cost = {cost}, satisfactory = {sat}");
-                    if (sat)
+                    break;
+                }
+                if(line == "default")
+                {
+                    RunSimulation(qsim, new double[] { 4.70, 9.09, 9.03, 5.70, 8.02, 1.71 });
+                    Console.ReadKey(true);
+                    Console.Clear();
+                    continue;
+                }
+
+                string[] split = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                double[] weights = new double[split.Length];
+                for(int i = 0; i < split.Length; i++)
+                {
+                    try
                     {
-                        if (cost < bestCost - 1E-6)
-                        {
-                            // New best cost found - update
-                            bestCost = cost;
-                            Array.Copy(tmp, bestItinerary, 6);
-                            successNumber = 1;
-                        }
-                        else if (Math.Abs(cost - bestCost) < 1E-6)
-                        {
-                            successNumber++;
-                        }
+                        weights[i] = double.Parse(split[i]);
+                        
+                    }
+                    catch
+                    {
+                        Console.WriteLine("error, invalid number");
+                        continue;
                     }
                 }
-                Console.WriteLine("Simulation is complete\n");
-                Console.WriteLine($"Best itinerary found: {string.Join(',', bestItinerary)}, cost = {bestCost}");
-                Console.WriteLine($"{successNumber * 100.0 / NUM_RUNS}% of runs found the best itinerary\n");
+                RunSimulation(qsim, weights);
+                Console.ReadKey(true);
+                Console.Clear();
             }
+
+            qsim.Dispose();
+        }
+
+        private static void RunSimulation(QuantumSimulator qsim, double[] segmentCosts)
+        {
+            if (segmentCosts.Length != 6)
+            {
+                Console.WriteLine("error, there have to be 6 weights");
+                return;
+            }
+            Dict.Clear();
+            Console.WriteLine("simulating...");
+
+            // Define the costs of journey segments
+            //double[] segmentCosts = { 4.70, 9.09, 9.03, 5.70, 8.02, 1.71 };
+            // Define the penalty for constraint violation
+            double penalty = 20;// segmentCosts.Sum()/2 + 1 ;
+
+            // Here are some magic QAOA parameters that we got by lucky guessing.
+            // Theoretically, they should yield the optimal solution in 70.6% of trials.
+            double[] dtx = { 0.619193, 0.742566, 0.060035, -1.568955, 0.045490 };
+            double[] dtz = { 3.182203, -1.139045, 0.221082, 0.537753, -0.417222 };
+
+            // Convert parameters to QArray<Double> to pass them to Q#
+            var tx = new QArray<double>(dtx);
+            var tz = new QArray<double>(dtz);
+            var costs = new QArray<double>(segmentCosts);
+
+            Data bestRun = null;
+            for (int trial = 0; trial < NUM_RUNS; trial++)
+            {
+                var result = QAOA_santa.Run(qsim, costs, penalty, tx, tz, NUM_QAOA_STEPS).Result;
+                var tmp = result.ToArray<bool>();
+                var cost = Cost(segmentCosts, tmp);
+                var sat = Satisfactory(tmp);
+
+                int key = Calc(tmp);
+                if (!Dict.ContainsKey(key))
+                {
+                    Dict.Add(key, new Data(1, cost, (uint)key, sat));
+                    if (sat && (bestRun == null || cost < bestRun.Cost))
+                    {
+                        bestRun = Dict[key];
+                    }
+                }
+                else
+                {
+                    Dict[key].Count++;
+                }
+            }
+            Console.WriteLine("simulation complete.");
+            if(bestRun != null)
+            {
+                Console.WriteLine($"best cycle: {bestRun.Weg.ToBinary(6)}, cost = {bestRun.Cost}");
+                Console.WriteLine($"{bestRun.Count} runs found the best result");
+            }
+            else
+            {
+                Console.WriteLine("no valid cycle was found");
+            }
+            PrintData();
+        }
+
+        private static void PrintData()
+        {
+            Console.WriteLine("-----------------");
+            Console.WriteLine($"data from {NUM_RUNS} runs");
+
+            List<Data> data = Dict.Values.ToList();
+            data.Sort((data1, data2) => data2.Count.CompareTo(data1.Count));
+            foreach (Data d in data)
+            {
+                if (d.Valid)
+                    Console.ForegroundColor = ConsoleColor.Green;
+                else
+                    Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine(d);
+                Console.ForegroundColor = ConsoleColor.Gray;
+            }
+        }
+
+        private static int Calc(bool[] array)
+        {
+            int val = array[0] ? 1 : 0;
+            for (int i = 1; i < array.Length; i++)
+            {
+                val <<= 1;
+                val |= array[i] ? 1 : 0;
+            }
+            return val;
+        }
+
+        class Data
+        {
+            public Data(int count, double cost, uint weg, bool valid)
+            {
+                Count = count;
+                Cost = cost;
+                Weg = weg;
+                Valid = valid;
+            }
+
+            public int Count { get; set; }
+            public double Cost { get; set; }
+            public uint Weg { get; set; }
+            public bool Valid { get; set; }
+
+            public override string ToString()
+            {
+                return String.Format($"{Weg.ToBinary(6)}: {Count} \t cost: {Cost}");
+            }
+        }
+    }
+
+    static class ExtFunc
+    {
+        public static string ToBinary(this uint number, int bitsLength = 32)
+        {
+            return NumberToBinary(number, bitsLength);
+        }
+
+        public static string NumberToBinary(uint number, int bitsLength = 32)
+        {
+            string result = Convert.ToString(number, 2).PadLeft(bitsLength, '0');
+
+            return result;
         }
     }
 }

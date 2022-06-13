@@ -73,13 +73,13 @@ namespace TSP {
         mutable r = new Bool[6];
         use x = Qubit[6];
         
-        ApplyToEach(H, x);                          // prepare the uniform distribution
+        ApplyToEach(H, x); //put all qubits into superposition
         for (i in 0..p-1)
         {
             InstanceHamiltonian(x, tz[i], h, J);    // do Exp(-i H_C tz[i])
             DriverHamiltonian(x, tx[i]);            // do Exp(-i H_0 tx[i])
         }
-        set r = MeasureAllReset(x);                 // measure in the computational basis
+        set r = MeasureAllReset(x);
         
         return r;
     }
